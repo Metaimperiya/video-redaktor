@@ -1,60 +1,394 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html>
 <head>
     <meta charset="UTF-8">
-    <title>Video Lab</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ВИДЕО КОДОМ</title>
     <style>
-        body {
-            background: #0b0b0e;
-            color: #00ffcc;
-            font-family: monospace;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
+        * {
             margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        .box {
-            border: 2px solid #00ffcc;
-            border-radius: 10px;
-            padding: 15px;
+        body {
             background: #000;
-            box-shadow: 0 0 20px rgba(0, 255, 204, 0.3);
-            text-align: center;
+            height: 100vh;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
         }
-        video {
-            display: block;
-            max-width: 320px;
-            width: 100%;
-            height: auto;
-            border-radius: 6px;
+        
+        /* Видео на весь экран */
+        #videoContainer {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
-        .status {
-            margin-top: 15px;
+        
+        canvas {
+            width: 100vw;
+            height: 100vh;
+            object-fit: contain;
+            background: #000;
+        }
+        
+        /* Кнопки внизу, отдельно от видео */
+        #controls {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            display: flex;
+            gap: 8px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 12px 20px;
+            border-radius: 16px;
+            backdrop-filter: blur(10px);
+            flex-wrap: wrap;
+            justify-content: center;
+            max-width: 95%;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        #controls button {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
             font-size: 13px;
+            font-weight: 600;
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+        
+        #controls button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.05);
+        }
+        
+        #controls button.active {
+            background: #00ff88;
+            color: #000;
+            border-color: #00ff88;
+        }
+        
+        #controls button.play-btn {
+            background: #00ff88;
+            color: #000;
+            border-color: #00ff88;
+        }
+        
+        #effectName {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 100;
+            color: #fff;
+            font-size: 18px;
+            font-weight: bold;
+            text-shadow: 0 0 20px rgba(0, 0, 0, 0.9);
+            background: rgba(0, 0, 0, 0.5);
+            padding: 8px 20px;
+            border-radius: 20px;
+            backdrop-filter: blur(5px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-family: monospace;
         }
     </style>
 </head>
 <body>
 
-    <div class="box">
-        <!-- Короткое и понятное имя файла без точек в названии -->
-        <video id="v" src="video.mp4" controls autoplay muted loop playsinline></video>
-        <div class="status" id="st">Статус: загрузка видео...</div>
+    <div id="videoContainer">
+        <canvas id="canvas"></canvas>
+    </div>
+
+    <div id="effectName">📹 Оригинал</div>
+
+    <div id="controls">
+        <button onclick="setEffect('original')" class="active">📹 Оригинал</button>
+        <button onclick="setEffect('glitch')">💥 Глитч</button>
+        <button onclick="setEffect('pixel')">🧊 Пиксели</button>
+        <button onclick="setEffect('blur')">🌫️ Размытие</button>
+        <button onclick="setEffect('vhs')">📼 VHS</button>
+        <button onclick="setEffect('invert')">🎨 Инверсия</button>
+        <button onclick="togglePlay()" class="play-btn">⏸️</button>
     </div>
 
     <script>
-        const v = document.getElementById('v');
-        const st = document.getElementById('st');
+        // =============================================
+        // ВСЯ МАГИЯ В ОДНОМ ФАЙЛЕ
+        // =============================================
 
-        v.addEventListener('loadeddata', () => {
-            st.innerText = `Видео в норме: ${v.videoWidth}x${v.videoHeight}px`;
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const effectName = document.getElementById('effectName');
+
+        // Настраиваем размеры под экран
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        // Загружаем видео
+        const video = document.createElement('video');
+        video.src = 'ssstik.io_1786111902591.mp4';
+        video.loop = true;
+        video.muted = true;
+        video.playsInline = true;
+        video.load();
+
+        // Переменные
+        let currentEffect = 'original';
+        let isPlaying = true;
+        let trailFrames = [];
+        let time = 0;
+
+        // Ждем загрузки и запускаем
+        video.addEventListener('loadeddata', () => {
+            video.play();
+            render();
         });
 
-        v.addEventListener('error', () => {
-            st.innerText = "Ошибка: файл video.mp4 не найден в корне!";
-        });
+        // ГЛАВНЫЙ РЕНДЕР
+        function render() {
+            time += 0.016; // ~60 FPS
+
+            if (video.readyState >= 2 && isPlaying) {
+                // Очищаем
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Рисуем видео с сохранением пропорций (вертикалка)
+                const videoAspect = video.videoWidth / video.videoHeight;
+                const canvasAspect = canvas.width / canvas.height;
+                
+                let drawWidth, drawHeight, offsetX, offsetY;
+                
+                if (videoAspect > canvasAspect) {
+                    drawHeight = canvas.height;
+                    drawWidth = canvas.height * videoAspect;
+                    offsetX = (canvas.width - drawWidth) / 2;
+                    offsetY = 0;
+                } else {
+                    drawWidth = canvas.width;
+                    drawHeight = canvas.width / videoAspect;
+                    offsetX = 0;
+                    offsetY = (canvas.height - drawHeight) / 2;
+                }
+                
+                // Рисуем видео
+                ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight);
+
+                // ПРИМЕНЯЕМ ЭФФЕКТ (только к области видео)
+                switch (currentEffect) {
+                    case 'original':
+                        break;
+                    case 'glitch':
+                        applyGlitch();
+                        break;
+                    case 'pixel':
+                        applyPixelate();
+                        break;
+                    case 'blur':
+                        applyBlur();
+                        break;
+                    case 'vhs':
+                        applyVHS();
+                        break;
+                    case 'invert':
+                        applyInvert();
+                        break;
+                }
+            }
+
+            requestAnimationFrame(render);
+        }
+
+        // =============================================
+        // ЭФФЕКТЫ (РАБОЧИЕ, НАСТОЯЩИЕ)
+        // =============================================
+
+        // 1. ГЛИТЧ (как в реальных клипах)
+        function applyGlitch() {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            
+            // Смещение RGB
+            const shift = Math.floor(Math.random() * 20) + 5;
+            for (let i = 0; i < data.length; i += 4) {
+                if (i + shift * 4 < data.length) {
+                    data[i] = data[i + shift * 4]; // R
+                    data[i + 1] = data[i + shift * 4 + 1]; // G
+                    data[i + 2] = data[i + shift * 4 + 2]; // B
+                }
+            }
+            
+            // Случайные полосы
+            for (let i = 0; i < data.length; i += 4) {
+                if (Math.random() < 0.005) {
+                    data[i] = 255;
+                    data[i + 1] = 255;
+                    data[i + 2] = 255;
+                }
+                if (Math.random() < 0.005) {
+                    data[i] = 0;
+                    data[i + 1] = 0;
+                    data[i + 2] = 0;
+                }
+            }
+            
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        // 2. ПИКСЕЛИЗАЦИЯ (как в редакторах)
+        function applyPixelate() {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            const size = 20;
+            
+            for (let y = 0; y < canvas.height; y += size) {
+                for (let x = 0; x < canvas.width; x += size) {
+                    const i = (y * canvas.width + x) * 4;
+                    if (i < data.length) {
+                        const r = data[i];
+                        const g = data[i + 1];
+                        const b = data[i + 2];
+                        ctx.fillStyle = `rgb(${r},${g},${b})`;
+                        ctx.fillRect(x, y, size, size);
+                    }
+                }
+            }
+        }
+
+        // 3. РАЗМЫТИЕ (реальное)
+        function applyBlur() {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            const tempData = new Uint8ClampedArray(data);
+            const radius = 3;
+            
+            for (let y = radius; y < canvas.height - radius; y++) {
+                for (let x = radius; x < canvas.width - radius; x++) {
+                    let r = 0, g = 0, b = 0;
+                    let count = 0;
+                    
+                    for (let dy = -radius; dy <= radius; dy++) {
+                        for (let dx = -radius; dx <= radius; dx++) {
+                            const i = ((y + dy) * canvas.width + (x + dx)) * 4;
+                            if (i < data.length && i >= 0) {
+                                r += tempData[i];
+                                g += tempData[i + 1];
+                                b += tempData[i + 2];
+                                count++;
+                            }
+                        }
+                    }
+                    
+                    const i = (y * canvas.width + x) * 4;
+                    data[i] = r / count;
+                    data[i + 1] = g / count;
+                    data[i + 2] = b / count;
+                }
+            }
+            
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        // 4. VHS ЭФФЕКТ (старый телевизор)
+        function applyVHS() {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            
+            // Шум
+            for (let i = 0; i < data.length; i += 4) {
+                if (Math.random() < 0.02) {
+                    data[i] = Math.random() * 255;
+                    data[i + 1] = Math.random() * 255;
+                    data[i + 2] = Math.random() * 255;
+                }
+            }
+            
+            // Горизонтальные полосы
+            for (let y = 0; y < canvas.height; y += 8) {
+                if (Math.random() < 0.1) {
+                    for (let x = 0; x < canvas.width; x++) {
+                        const i = (y * canvas.width + x) * 4;
+                        if (i < data.length) {
+                            data[i] = data[i] * 0.3;
+                            data[i + 1] = data[i + 1] * 0.3;
+                            data[i + 2] = data[i + 2] * 0.3;
+                        }
+                    }
+                }
+            }
+            
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        // 5. ИНВЕРСИЯ (как в клипах)
+        function applyInvert() {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            
+            for (let i = 0; i < data.length; i += 4) {
+                data[i] = 255 - data[i];
+                data[i + 1] = 255 - data[i + 1];
+                data[i + 2] = 255 - data[i + 2];
+            }
+            
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        // =============================================
+        // УПРАВЛЕНИЕ
+        // =============================================
+
+        function setEffect(effect) {
+            currentEffect = effect;
+            const names = {
+                original: '📹 Оригинал',
+                glitch: '💥 Глитч',
+                pixel: '🧊 Пиксели',
+                blur: '🌫️ Размытие',
+                vhs: '📼 VHS',
+                invert: '🎨 Инверсия'
+            };
+            effectName.textContent = names[effect] || effect;
+            
+            // Обновляем активную кнопку
+            document.querySelectorAll('#controls button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            event.target.classList.add('active');
+            
+            // Очищаем шлейф
+            trailFrames = [];
+        }
+
+        function togglePlay() {
+            isPlaying = !isPlaying;
+            if (isPlaying) {
+                video.play();
+                document.querySelector('.play-btn').textContent = '⏸️';
+            } else {
+                video.pause();
+                document.querySelector('.play-btn').textContent = '▶️';
+            }
+        }
+
+        // Запуск
+        video.load();
+        console.log('🎬 Видео загружается...');
     </script>
 </body>
 </html>
