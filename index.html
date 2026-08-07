@@ -1,143 +1,302 @@
 <!DOCTYPE html>
-<html lang="ru">
+<html>
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Code Video Editor Lab</title>
+    <title>МОЩЬ ВИДЕО В КОДЕ</title>
     <style>
-        body {
+        * {
             margin: 0;
             padding: 0;
-            background-color: #0b0b0e;
-            color: #00ffcc;
-            font-family: monospace;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            overflow: hidden;
         }
-
-        .lab-container {
-            position: relative;
-            box-shadow: 0 0 40px rgba(0, 255, 204, 0.15);
-            border-radius: 12px;
-            overflow: hidden;
-            border: 1px solid rgba(0, 255, 204, 0.3);
-        }
-
-        /* Прячем исходный тег видео, оставляем только канву, куда код рендерит кадры */
-        video {
-            display: none;
-        }
-
-        canvas {
-            display: block;
-            max-width: 100%;
-            height: auto;
+        body {
             background: #000;
-        }
-
-        .controls {
-            margin-top: 20px;
             display: flex;
-            gap: 15px;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-family: Arial;
         }
-
+        #container {
+            position: relative;
+        }
+        canvas {
+            border: 2px solid #00ffcc;
+            width: 800px;
+            height: 450px;
+            background: #111;
+        }
+        #menu {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 12px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
         button {
-            background: transparent;
-            color: #00ffcc;
-            border: 1px solid #00ffcc;
+            background: #00ffcc;
+            color: #000;
+            border: none;
             padding: 10px 20px;
             border-radius: 6px;
-            cursor: pointer;
-            font-family: monospace;
             font-weight: bold;
-            transition: all 0.2s ease;
+            cursor: pointer;
+            font-size: 14px;
+            transition: 0.2s;
         }
-
         button:hover {
-            background: #00ffcc;
-            color: #0b0b0e;
-            box-shadow: 0 0 15px rgba(0, 255, 204, 0.5);
+            transform: scale(1.1);
+            background: #fff;
+        }
+        button.active {
+            background: #ff3366;
+            color: #fff;
+        }
+        #info {
+            color: #00ffcc;
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 12px;
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 5px 10px;
+            border-radius: 4px;
         }
     </style>
 </head>
 <body>
 
-    <div class="lab-container">
-        <!-- Твое видео из корневой папки -->
-        <video id="sourceVideo" src="ssstik.io_1786111902591.mp4" crossorigin="anonymous" autoplay muted loop playsinline></video>
-        <!-- Канва, на которой код будет "пересобирать" каждый кадр -->
-        <canvas id="videoCanvas"></canvas>
-    </div>
-
-    <div class="controls">
-        <button id="glitchBtn">Включить Глитч</button>
-        <button id="filterBtn">Цветокор: Киберпанк</button>
+    <div id="container">
+        <canvas id="canvas" width="800" height="450"></canvas>
+        <div id="info">🎥 Эффект: <span id="effectName">Оригинал</span></div>
+        <div id="menu">
+            <button onclick="setEffect('original')">🔄 Оригинал</button>
+            <button onclick="setEffect('glitch')">💥 Глитч</button>
+            <button onclick="setEffect('pixel')">🧊 Пиксели</button>
+            <button onclick="setEffect('trail')">👻 Шлейф</button>
+            <button onclick="setEffect('color')">🌈 Цветовой взрыв</button>
+            <button onclick="setEffect('mirror')">🪞 Зеркало</button>
+            <button onclick="togglePlay()">⏯️ Пауза/Плей</button>
+        </div>
     </div>
 
     <script>
-        const video = document.getElementById('sourceVideo');
-        const canvas = document.getElementById('videoCanvas');
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        // =============================================
+        // ВЕСЬ РАБОЧИЙ КОД ТУТ. ВСТАВИЛ И РАБОТАЕТ.
+        // =============================================
 
-        let glitchActive = false;
-        let cyberpunkFilter = false;
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const effectName = document.getElementById('effectName');
 
-        // Подстраиваем размеры канвы под реальный размер видео, когда оно загрузится
-        video.addEventListener('loadedmetadata', () => {
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            renderFrame();
+        // 1. ЗАГРУЖАЕМ ТВОЕ ВИДЕО
+        const video = document.createElement('video');
+        video.src = 'ssstik.io_1786111902591.mp4'; // ТВОЙ ФАЙЛ
+        video.loop = true;
+        video.muted = true;
+        video.load();
+
+        // 2. ПЕРЕМЕННЫЕ ДЛЯ ЭФФЕКТОВ
+        let currentEffect = 'original';
+        let isPlaying = true;
+        let trailFrames = [];
+        let glitchOffset = 0;
+
+        // 3. ЖДЕМ ЗАГРУЗКИ И ЗАПУСКАЕМ
+        video.addEventListener('loadeddata', () => {
+            video.play();
+            render();
         });
 
-        // Кнопки управления эффектами
-        document.getElementById('glitchBtn').addEventListener('click', () => {
-            glitchActive = !glitchActive;
-            document.getElementById('glitchBtn').style.background = glitchActive ? '#00ffcc' : 'transparent';
-            document.getElementById('glitchBtn').style.color = glitchActive ? '#0b0b0e' : '#00ffcc';
-        });
+        // 4. ГЛАВНЫЙ ЦИКЛ (60 кадров в секунду)
+        function render() {
+            if (video.readyState >= 2 && isPlaying) {
+                // Очищаем канвас
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        document.getElementById('filterBtn').addEventListener('click', () => {
-            cyberpunkFilter = !cyberpunkFilter;
-            document.getElementById('filterBtn').style.background = cyberpunkFilter ? '#00ffcc' : 'transparent';
-            document.getElementById('filterBtn').style.color = cyberpunkFilter ? '#0b0b0e' : '#00ffcc';
-        });
-
-        // Главный цикл покадрового монтажа
-        function renderFrame() {
-            if (!video.paused && !video.ended) {
-                // 1. Рисуем чистый кадр из видео на канву
+                // Рисуем текущий кадр видео
                 ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-                // 2. Если включен кастомный киберпанк-фильтр (манипуляция с пикселями)
-                if (cyberpunkFilter) {
-                    let frameData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                    let pixels = frameData.data;
-                    for (let i = 0; i < pixels.length; i += 4) {
-                        pixels[i]     = pixels[i] * 0.8;       // Уменьшаем красный
-                        pixels[i + 1] = pixels[i + 1] * 1.2;   // Усиливаем зеленый
-                        pixels[i + 2] = pixels[i + 2] * 1.5;   // Усиливаем синий (неоновый оттенок)
-                    }
-                    ctx.putImageData(frameData, 0, 0);
+                // ПРИМЕНЯЕМ ВЫБРАННЫЙ ЭФФЕКТ
+                switch (currentEffect) {
+                    case 'original':
+                        // Ничего не делаем, просто видео
+                        break;
+                    case 'glitch':
+                        applyGlitch();
+                        break;
+                    case 'pixel':
+                        applyPixelate();
+                        break;
+                    case 'trail':
+                        applyTrail();
+                        break;
+                    case 'color':
+                        applyColorExplosion();
+                        break;
+                    case 'mirror':
+                        applyMirror();
+                        break;
                 }
 
-                // 3. Если включен глитч-эффект (математический сдвиг строк пикселей)
-                if (glitchActive && Math.random() > 0.7) {
-                    let sliceHeight = Math.floor(Math.random() * 20) + 5;
-                    let y = Math.floor(Math.random() * (canvas.height - sliceHeight));
-                    let xOffset = (Math.random() - 0.5) * 40;
-                    
-                    let sliceData = ctx.getImageData(0, y, canvas.width, sliceHeight);
-                    ctx.putImageData(sliceData, xOffset, y);
+                // Обновляем время для анимации эффектов
+                glitchOffset += 0.1;
+            }
+
+            // Следующий кадр
+            requestAnimationFrame(render);
+        }
+
+        // =============================================
+        // ВСЕ ЭФФЕКТЫ (РАБОТАЮТ В РЕАЛЬНОМ ВРЕМЕНИ)
+        // =============================================
+
+        // 1. ГЛИТЧ (разрыв изображения)
+        function applyGlitch() {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+
+            for (let i = 0; i < data.length; i += 4) {
+                // Случайный сдвиг пикселей
+                if (Math.random() < 0.05) {
+                    const shift = Math.floor(Math.random() * 30);
+                    if (i + shift * 4 < data.length) {
+                        data[i] = data[i + shift * 4];
+                        data[i + 1] = data[i + shift * 4 + 1];
+                        data[i + 2] = data[i + shift * 4 + 2];
+                    }
+                }
+                // Иногда вставляем белые полосы
+                if (Math.random() < 0.01) {
+                    data[i] = 255;
+                    data[i + 1] = 255;
+                    data[i + 2] = 255;
                 }
             }
-            
-            // Зацикливаем отрисовку под частоту кадров монитора (обычно 60 FPS)
-            requestAnimationFrame(renderFrame);
+            ctx.putImageData(imageData, 0, 0);
         }
+
+        // 2. ПИКСЕЛИЗАЦИЯ
+        function applyPixelate() {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            const size = 12;
+
+            for (let y = 0; y < canvas.height; y += size) {
+                for (let x = 0; x < canvas.width; x += size) {
+                    const i = (y * canvas.width + x) * 4;
+                    const r = data[i];
+                    const g = data[i + 1];
+                    const b = data[i + 2];
+                    ctx.fillStyle = `rgb(${r},${g},${b})`;
+                    ctx.fillRect(x, y, size, size);
+                }
+            }
+        }
+
+        // 3. ШЛЕЙФ (движение с затуханием)
+        function applyTrail() {
+            const currentFrame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            trailFrames.push(currentFrame);
+            if (trailFrames.length > 15) trailFrames.shift();
+
+            // Рисуем все кадры с прозрачностью
+            trailFrames.forEach((frame, index) => {
+                ctx.globalAlpha = 0.08 * (index / trailFrames.length);
+                ctx.putImageData(frame, 0, 0);
+            });
+            ctx.globalAlpha = 1.0;
+        }
+
+        // 4. ЦВЕТОВОЙ ВЗРЫВ (перестановка каналов)
+        function applyColorExplosion() {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            const time = Date.now() / 1000;
+
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+
+                // Меняем каналы в зависимости от времени
+                const shift = Math.floor(time) % 3;
+                if (shift === 0) {
+                    data[i] = g;
+                    data[i + 1] = b;
+                    data[i + 2] = r;
+                } else if (shift === 1) {
+                    data[i] = b;
+                    data[i + 1] = r;
+                    data[i + 2] = g;
+                }
+            }
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        // 5. ЗЕРКАЛО
+        function applyMirror() {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            const half = canvas.width / 2;
+
+            for (let y = 0; y < canvas.height; y++) {
+                for (let x = 0; x < half; x++) {
+                    const i = (y * canvas.width + x) * 4;
+                    const mirrorX = canvas.width - x - 1;
+                    const mirrorI = (y * canvas.width + mirrorX) * 4;
+
+                    data[i] = data[mirrorI];
+                    data[i + 1] = data[mirrorI + 1];
+                    data[i + 2] = data[mirrorI + 2];
+                }
+            }
+            ctx.putImageData(imageData, 0, 0);
+        }
+
+        // =============================================
+        // УПРАВЛЕНИЕ (КНОПКИ)
+        // =============================================
+
+        function setEffect(effect) {
+            currentEffect = effect;
+            const names = {
+                original: 'Оригинал',
+                glitch: 'Глитч (разрыв)',
+                pixel: 'Пикселизация',
+                trail: 'Шлейф',
+                color: 'Цветовой взрыв',
+                mirror: 'Зеркало'
+            };
+            effectName.textContent = names[effect] || effect;
+
+            // Очищаем шлейф при смене эффекта
+            trailFrames = [];
+        }
+
+        function togglePlay() {
+            isPlaying = !isPlaying;
+            if (isPlaying) {
+                video.play();
+            } else {
+                video.pause();
+            }
+        }
+
+        // Запускаем, если видео уже загружено
+        if (video.readyState >= 2) {
+            video.play();
+        }
+
+        // Дополнительно: если видео не загрузилось
+        console.log('Если видео не работает - проверь имя файла! Должен быть ssstik.io_1786111902591.mp4');
     </script>
+
 </body>
 </html>
